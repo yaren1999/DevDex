@@ -11,6 +11,8 @@ contract DevSwap is ReentrancyGuard {
     uint256 public reserveA;
     uint256 public reserveB;
 
+    event LiquidityAdded( address user,  uint256 amountA,  uint256 amountB);
+
     constructor(address _tokenA , address _tokenB) {
         require(_tokenA != address(0), "Gecersiz TokenA adresi");
         require(_tokenB != address(0), "Gecersiz TokenB adresi");
@@ -18,5 +20,18 @@ contract DevSwap is ReentrancyGuard {
 
         tokenA = IERC20(_tokenA);
         tokenB = IERC20(_tokenB);
+    }
+
+    function addLiquidity (uint256 _amountA , uint256 _amountB) external nonReentrant {
+        require(_amountA > 0,"TokenA miktari 0 olamaz!");
+        require(_amountB > 0,"TokenB miktari 0 olamaz!");
+
+        reserveA += _amountA;
+        reserveB += _amountB;
+
+        tokenA.transferFrom(msg.sender, address(this), _amountA);
+        tokenB.transferFrom(msg.sender, address(this), _amountB);
+
+        emit LiquidityAdded(msg.sender, _amountA , _amountB);
     }
 }
