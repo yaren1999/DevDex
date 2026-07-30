@@ -83,16 +83,21 @@ describe("DevSwap Testleri", function () {
       expect(await devSwap.reserveB()).to.equal(amount);
     });
   });
+
   
-  it("Havuzda likidite yoksa swap engellenmeli", async function () {
+
+  describe("Swap testleri", function () {
+
+    beforeEach(async function () {
+      await devSwap.addLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+    });
+
+    it("Havuzda likidite yoksa swap engellenmeli", async function () {
+      await devSwap.removeLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+
       await expect(
        devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI)
       ).to.be.revertedWith("Havuzda likidite yok!");
-    });
-
-  describe("Swap testleri", function () {
-    beforeEach(async function () {
-      await devSwap.addLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
     });
 
     it("Geçersiz bir token adresi girilirse engellenmeli", async function () {
@@ -155,4 +160,92 @@ describe("DevSwap Testleri", function () {
    
   });
 
+  describe("RemoveLiquidity testleri", function () {
+     const REMOVE_A = ethers.parseEther("100");
+    const REMOVE_B = ethers.parseEther("100");
+
+    beforeEach(async function () {
+      await devSwap.addLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+    });
+
+
+    it("Likidite çıkarılmalı ve rezervler düşmeli", async function () {
+      await devSwap.removeLiquidity(REMOVE_A, REMOVE_B);
+
+      expect(await devSwap.reserveA()).to.equal(LIKIDITE_MIKTARI - REMOVE_A);
+      expect(await devSwap.reserveB()).to.equal(LIKIDITE_MIKTARI - REMOVE_B);
+    });
+
+    it("Çekilen tokenlar cüzdana geçmeli", async function () {
+      const beforeA = await tokenA.balanceOf(owner.address);
+      const beforeB = await tokenB.balanceOf(owner.address);
+
+      await devSwap.removeLiquidity(REMOVE_A, REMOVE_B);
+
+      const afterA = await tokenA.balanceOf(owner.address);
+      const afterB = await tokenB.balanceOf(owner.address);
+
+      expect(afterA - beforeA).to.equal(REMOVE_A);
+      expect(afterB - beforeB).to.equal(REMOVE_B);
+    });
+
+    it("LiquidityRemoved eventi tetiklenmeli", async function () {
+      await expect(devSwap.removeLiquidity(REMOVE_A, REMOVE_B))
+        .to.emit(devSwap, "LiquidityRemoved")
+        .withArgs(owner.address, REMOVE_A, REMOVE_B);
+    });
+
+
+    it("TokenA miktari 0 engellenmeli", async function () {
+      await expect(
+        devSwap.removeLiquidity(0, REMOVE_B)
+      ).to.be.revertedWith("TokenA miktari sifir olamaz");
+    });
+
+    it("TokenB miktari 0 engellenmeli", async function () {
+      await expect(
+        devSwap.removeLiquidity(REMOVE_A, 0)
+      ).to.be.revertedWith("TokenB miktari sifir olamaz");
+    });
+
+    it("Yetersiz TokenA rezervi engellenmeli", async function () {
+      const TOO_MUCH = LIKIDITE_MIKTARI + ethers.parseEther("1");
+      await expect(
+        devSwap.removeLiquidity(TOO_MUCH, REMOVE_B)
+      ).to.be.revertedWith("Yetersiz TokenA rezervi");
+    });
+
+    it("Yetersiz TokenB rezervi engellenmeli", async function () {
+      const TOO_MUCH = LIKIDITE_MIKTARI + ethers.parseEther("1");
+      await expect(
+        devSwap.removeLiquidity(REMOVE_A, TOO_MUCH)
+      ).to.be.revertedWith("Yetersiz TokenB rezervi");
+    });
+  });
+
+  describe("GetPrice testleri", function () {
+     beforeEach(async function () {
+        await devSwap.addLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+     });
+   
+
+    it("Havuzda likidite yoksa engellenmeli", async function () {
+      await devSwap.removeLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+
+      await expect(
+        devSwap.getPrice(tokenA.target)
+      ).to.be.revertedWith("Havuzda likidite yok!"); 
+    });
+
+  
+     it("Eşit rezervlerde 1 TKA = 1 TKB (1e18 Wei) dönmeli", async function () {
+        const priceA = await devSwap.getPrice(tokenA.target);
+        const priceB = await devSwap.getPrice(tokenB.target);
+        const ONE_ETH = ethers.parseEther("1");
+
+        expect(priceA).to.equal(ONE_ETH);
+        expect(priceB).to.equal(ONE_ETH);
+      });
+
+  });
 });

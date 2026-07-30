@@ -13,6 +13,7 @@ contract DevSwap is ReentrancyGuard {
 
     event LiquidityAdded( address user,  uint256 amountA,  uint256 amountB);
     event Swapped(address indexed sender, address indexed tokenIn, uint256 amountIn, uint256 amountOut);
+    event LiquidityRemoved(address indexed provider, uint256 amountA, uint256 amountB );
 
     constructor(address _tokenA , address _tokenB) {
         require(_tokenA != address(0), "Gecersiz TokenA adresi");
@@ -66,5 +67,32 @@ contract DevSwap is ReentrancyGuard {
        tokenOut.transfer(msg.sender, amountOut);
 
        emit Swapped(msg.sender, _tokenIn, _amountIn, amountOut);
+    }
+
+    function removeLiquidity(uint256 _amountA, uint256 _amountB) external nonReentrant {
+        require(_amountA > 0, "TokenA miktari sifir olamaz");
+        require(_amountB > 0, "TokenB miktari sifir olamaz");
+        require(reserveA >= _amountA, "Yetersiz TokenA rezervi");
+        require(reserveB >= _amountB, "Yetersiz TokenB rezervi");
+
+        reserveA -= _amountA;
+        reserveB -= _amountB;
+
+        tokenA.transfer(msg.sender, _amountA);
+        tokenB.transfer(msg.sender, _amountB);
+
+        emit LiquidityRemoved(msg.sender, _amountA, _amountB);
+
+    }
+
+    function getPrice(address _token) public view returns (uint256) {
+      require(_token == address(tokenA) || _token == address(tokenB), "Gecersiz token");
+      require(reserveA > 0 && reserveB > 0, "Havuzda likidite yok!");
+
+       if (_token == address(tokenA)) {
+          return (reserveB * 1e18) / reserveA; 
+        } else {
+           return (reserveA * 1e18) / reserveB; 
+        }
     }
 }
