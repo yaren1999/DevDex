@@ -17,7 +17,7 @@ contract DevSwap is ERC20, ReentrancyGuard {
 
     event LiquidityAdded( address user,  uint256 amountA,  uint256 amountB , uint256 lpMinted);
     event Swapped(address indexed sender, address indexed tokenIn, uint256 amountIn, uint256 amountOut);
-    event LiquidityRemoved(address indexed provider, uint256 amountA, uint256 amountB );
+    event LiquidityRemoved(address indexed provider, uint256 amountA, uint256 amountB, uint256 lpBurned);
 
     constructor(address _tokenA , address _tokenB) ERC20("DevSwap LP", "DSLP") {
         require(_tokenA != address(0), "Gecersiz TokenA adresi");
@@ -103,20 +103,26 @@ contract DevSwap is ERC20, ReentrancyGuard {
        emit Swapped(msg.sender, _tokenIn, _amountIn, amountOut);
     }
 
-    function removeLiquidity(uint256 _amountA, uint256 _amountB) external nonReentrant {
-        require(_amountA > 0, "TokenA miktari sifir olamaz");
-        require(_amountB > 0, "TokenB miktari sifir olamaz");
-        require(reserveA >= _amountA, "Yetersiz TokenA rezervi");
-        require(reserveB >= _amountB, "Yetersiz TokenB rezervi");
+    function removeLiquidity(uint256 _lpAmount) external nonReentrant returns (uint256 amountA, uint256 amountB) {
+      require(_lpAmount > 0, "LP miktari sifir olamaz");
+      require(balanceOf(msg.sender) >= _lpAmount, "Yetersiz LP bakiyesi");
 
-        reserveA -= _amountA;
-        reserveB -= _amountB;
+      uint256 supply = totalSupply();
 
-        tokenA.transfer(msg.sender, _amountA);
-        tokenB.transfer(msg.sender, _amountB);
+      amountA = (_lpAmount * reserveA) / supply;
+      amountB = (_lpAmount * reserveB) / supply;
 
-        emit LiquidityRemoved(msg.sender, _amountA, _amountB);
+      require(amountA > 0 && amountB > 0, "Cikan miktar sifir");
 
+      _burn(msg.sender, _lpAmount);
+
+      reserveA -= amountA;
+      reserveB -= amountB;
+
+     tokenA.transfer(msg.sender, amountA);
+     tokenB.transfer(msg.sender, amountB);
+
+     emit LiquidityRemoved(msg.sender, amountA, amountB, _lpAmount);
     }
 
     function getPrice(address _token) public view returns (uint256) {

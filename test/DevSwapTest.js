@@ -229,10 +229,11 @@ describe("DevSwap Testleri", function () {
     });
 
     it("Havuzda likidite yoksa swap engellenmeli", async function () {
-      await devSwap.removeLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+      const DevSwapFresh = await ethers.getContractFactory("DevSwap");
+      const devSwapFresh = await DevSwapFresh.deploy(tokenA.target, tokenB.target);
 
       await expect(
-        devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI)
+        devSwapFresh.connect(artist).swap(tokenA.target, SWAP_MIKTARI)  
       ).to.be.revertedWith("Havuzda likidite yok!");
     });
 
@@ -291,66 +292,101 @@ describe("DevSwap Testleri", function () {
 
   
   describe("RemoveLiquidity testleri", function () {
-    const REMOVE_A = ethers.parseEther("100");
-    const REMOVE_B = ethers.parseEther("100");
-
-    beforeEach(async function () {
-      await devSwap.addLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
-    });
-
-    it("Likidite çıkarılmalı ve rezervler düşmeli", async function () {
-      await devSwap.removeLiquidity(REMOVE_A, REMOVE_B);
-
-      expect(await devSwap.reserveA()).to.equal(LIKIDITE_MIKTARI - REMOVE_A);
-      expect(await devSwap.reserveB()).to.equal(LIKIDITE_MIKTARI - REMOVE_B);
-    });
-
-    it("Çekilen tokenlar cüzdana geçmeli", async function () {
-      const beforeA = await tokenA.balanceOf(owner.address);
-      const beforeB = await tokenB.balanceOf(owner.address);
-
-      await devSwap.removeLiquidity(REMOVE_A, REMOVE_B);
-
-      const afterA = await tokenA.balanceOf(owner.address);
-      const afterB = await tokenB.balanceOf(owner.address);
-
-      expect(afterA - beforeA).to.equal(REMOVE_A);
-      expect(afterB - beforeB).to.equal(REMOVE_B);
-    });
-
-    it("LiquidityRemoved eventi tetiklenmeli", async function () {
-      await expect(devSwap.removeLiquidity(REMOVE_A, REMOVE_B))
-        .to.emit(devSwap, "LiquidityRemoved")
-        .withArgs(owner.address, REMOVE_A, REMOVE_B);
-    });
-
-    it("TokenA miktari 0 engellenmeli", async function () {
-      await expect(
-        devSwap.removeLiquidity(0, REMOVE_B)
-      ).to.be.revertedWith("TokenA miktari sifir olamaz");
-    });
-
-    it("TokenB miktari 0 engellenmeli", async function () {
-      await expect(
-        devSwap.removeLiquidity(REMOVE_A, 0)
-      ).to.be.revertedWith("TokenB miktari sifir olamaz");
-    });
-
-    it("Yetersiz TokenA rezervi engellenmeli", async function () {
-      const TOO_MUCH = LIKIDITE_MIKTARI + ethers.parseEther("1");
-      await expect(
-        devSwap.removeLiquidity(TOO_MUCH, REMOVE_B)
-      ).to.be.revertedWith("Yetersiz TokenA rezervi");
-    });
-
-    it("Yetersiz TokenB rezervi engellenmeli", async function () {
-      const TOO_MUCH = LIKIDITE_MIKTARI + ethers.parseEther("1");
-      await expect(
-        devSwap.removeLiquidity(REMOVE_A, TOO_MUCH)
-      ).to.be.revertedWith("Yetersiz TokenB rezervi");
-    });
+  beforeEach(async function () {
+    await devSwap.addLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
   });
 
+  it("LP miktari 0 ise revert etmeli", async function () {
+    await expect(
+      devSwap.removeLiquidity(0)
+    ).to.be.revertedWith("LP miktari sifir olamaz");
+  });
+
+  it("Yetersiz LP bakiyesi varsa revert etmeli", async function () {
+    const ownerLP = await devSwap.balanceOf(owner.address);
+    
+    await expect(
+      devSwap.removeLiquidity(ownerLP + 1n)
+    ).to.be.revertedWith("Yetersiz LP bakiyesi");
+  });
+
+  it("Likidite cikarilinca reservelar dogru dusmeli", async function () {
+    const ownerLP = await devSwap.balanceOf(owner.address);
+    const totalSupply = await devSwap.totalSupply();
+    const reserveABefore = await devSwap.reserveA();
+
+    const cekilecekLP = ownerLP / 2n;
+    const beklenenAmountA = (cekilecekLP * reserveABefore) / totalSupply;
+    await devSwap.removeLiquidity(cekilecekLP);
+
+    expect(await devSwap.reserveA()).to.equal(reserveABefore - beklenenAmountA);
+  });
+
+  it("Cekilen tokenlar cuzdana gecmeli", async function () {
+    const ownerLP = await devSwap.balanceOf(owner.address);
+    const cekilecekLP = ownerLP / 2n;
+
+    const beforeA = await tokenA.balanceOf(owner.address);
+    const beforeB = await tokenB.balanceOf(owner.address);
+
+    await devSwap.removeLiquidity(cekilecekLP);
+
+    const afterA = await tokenA.balanceOf(owner.address);
+    const afterB = await tokenB.balanceOf(owner.address);
+
+    expect(afterA).to.be.above(beforeA);
+    expect(afterB).to.be.above(beforeB);
+  });
+
+  it("LP token gercekten yakilmali (burn olmali)", async function () {
+    const ownerLPBefore = await devSwap.balanceOf(owner.address);
+    const cekilecekLP = ownerLPBefore / 2n;
+    await devSwap.removeLiquidity(cekilecekLP);
+
+    const ownerLPAfter = await devSwap.balanceOf(owner.address);
+    expect(ownerLPBefore - ownerLPAfter).to.equal(cekilecekLP);
+  });
+
+  it("totalSupply LP yakilinca azalmali", async function () {
+    const totalSupplyBefore = await devSwap.totalSupply();
+    const ownerLP = await devSwap.balanceOf(owner.address);
+    const cekilecekLP = ownerLP / 2n;
+
+    await devSwap.removeLiquidity(cekilecekLP);
+
+    const totalSupplyAfter = await devSwap.totalSupply();
+    expect(totalSupplyBefore - totalSupplyAfter).to.equal(cekilecekLP);
+  });
+
+  it("LiquidityRemoved eventi dogru parametrelerle tetiklenmeli", async function () {
+    const ownerLP = await devSwap.balanceOf(owner.address);
+    const totalSupply = await devSwap.totalSupply();
+    const reserveABefore = await devSwap.reserveA();
+    const reserveBBefore = await devSwap.reserveB();
+
+    const cekilecekLP = ownerLP / 2n;
+    const beklenenAmountA = (cekilecekLP * reserveABefore) / totalSupply;
+    const beklenenAmountB = (cekilecekLP * reserveBBefore) / totalSupply;
+
+    await expect(devSwap.removeLiquidity(cekilecekLP))
+      .to.emit(devSwap, "LiquidityRemoved")
+      .withArgs(owner.address, beklenenAmountA, beklenenAmountB, cekilecekLP);
+  });
+
+  it("GUVENLIK: LP'si olmayan biri (stranger) hicbir sey cekememeli", async function () {
+    await expect(
+      devSwap.connect(stranger).removeLiquidity(1)
+    ).to.be.revertedWith("Yetersiz LP bakiyesi");
+  });
+
+  it("Tum LP yakilinca havuz bosalmali", async function () {
+    const ownerLP = await devSwap.balanceOf(owner.address);
+    await devSwap.removeLiquidity(ownerLP);
+
+    const reserveAAfter = await devSwap.reserveA();
+    expect(reserveAAfter).to.be.below(ethers.parseEther("0.001")); 
+  });
+});
   
   describe("GetPrice testleri", function () {
     beforeEach(async function () {
@@ -358,10 +394,11 @@ describe("DevSwap Testleri", function () {
     });
 
     it("Havuzda likidite yoksa engellenmeli", async function () {
-      await devSwap.removeLiquidity(LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+      const DevSwapFresh = await ethers.getContractFactory("DevSwap");
+      const devSwapFresh = await DevSwapFresh.deploy(tokenA.target, tokenB.target);
 
       await expect(
-        devSwap.getPrice(tokenA.target)
+        devSwapFresh.getPrice(tokenA.target)
       ).to.be.revertedWith("Havuzda likidite yok!");
     });
 
