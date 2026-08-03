@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract DevSwap is ReentrancyGuard {
+contract DevSwap is ERC20, ReentrancyGuard {
     IERC20 public tokenA;
     IERC20 public tokenB;
 
     uint256 public reserveA;
     uint256 public reserveB;
 
-    event LiquidityAdded( address user,  uint256 amountA,  uint256 amountB);
+    uint256 public constant MINIMUM_LIQUIDITY = 1000;
+
+    event LiquidityAdded( address user,  uint256 amountA,  uint256 amountB , uint256 lpMinted);
     event Swapped(address indexed sender, address indexed tokenIn, uint256 amountIn, uint256 amountOut);
     event LiquidityRemoved(address indexed provider, uint256 amountA, uint256 amountB );
 
-    constructor(address _tokenA , address _tokenB) {
+    constructor(address _tokenA , address _tokenB) ERC20("DevSwap LP", "DSLP") {
         require(_tokenA != address(0), "Gecersiz TokenA adresi");
         require(_tokenB != address(0), "Gecersiz TokenB adresi");
         require(_tokenA != _tokenB, "Tokenlar ayni olamaz");
@@ -24,9 +28,23 @@ contract DevSwap is ReentrancyGuard {
         tokenB = IERC20(_tokenB);
     }
 
-    function addLiquidity (uint256 _amountA , uint256 _amountB) external nonReentrant {
+    function addLiquidity (uint256 _amountA , uint256 _amountB) external nonReentrant returns (uint256 lpMinted) {
         require(_amountA > 0,"TokenA miktari 0 olamaz!");
         require(_amountB > 0,"TokenB miktari 0 olamaz!");
+
+        if (totalSupply() == 0) {
+            uint256 totalLp = sqrt(_amountA * _amountB);
+            require(totalLp > MINIMUM_LIQUIDITY, "Yatirilan miktar cok dusuk");
+            lpMinted = totalLp - MINIMUM_LIQUIDITY;
+
+            _mint(address(0xdead), MINIMUM_LIQUIDITY);
+        } else {
+            uint256 lpFromA = (_amountA * totalSupply()) / reserveA;
+            uint256 lpFromB = (_amountB * totalSupply()) / reserveB;
+
+            lpMinted = lpFromA < lpFromB ? lpFromA : lpFromB;
+            require(lpMinted > 0, "Yetersiz LP miktari");
+        }
 
         reserveA += _amountA;
         reserveB += _amountB;
@@ -34,12 +52,28 @@ contract DevSwap is ReentrancyGuard {
         tokenA.transferFrom(msg.sender, address(this), _amountA);
         tokenB.transferFrom(msg.sender, address(this), _amountB);
 
-        emit LiquidityAdded(msg.sender, _amountA , _amountB);
+        _mint(msg.sender, lpMinted);
+        emit LiquidityAdded(msg.sender, _amountA , _amountB , lpMinted);
+    }
+
+    function sqrt(uint256 y) internal pure returns (uint256 z) {
+         if (y > 3) {
+           z = y;
+           uint256 x = y / 2 + 1;
+           while (x < z) {
+               z = x;
+               x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+             z = 1;
+        }
     }
 
     function swap(address _tokenIn, uint256 _amountIn) external nonReentrant returns (uint256 amountOut) {
       require(_tokenIn == address(tokenA) || _tokenIn == address(tokenB), "Gecersiz token");
       require(_amountIn > 0, "Miktar sifir olamaz!");
+
+      
 
       bool isTokenA = _tokenIn == address(tokenA);
       IERC20 tokenIn = isTokenA ? tokenA : tokenB;
