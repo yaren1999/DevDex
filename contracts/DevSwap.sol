@@ -84,8 +84,9 @@ contract DevSwap is ERC20, ReentrancyGuard {
 
       require(reserveIn > 0 && reserveOut > 0, "Havuzda likidite yok!");
 
-   
-      amountOut = (reserveOut * _amountIn) / (reserveIn + _amountIn);
+      uint256 amountInWithFee = _amountIn * 997;
+      amountOut = (reserveOut * amountInWithFee) / (reserveIn * 1000 + amountInWithFee);
+     
       require(amountOut > 0, "Cikis miktari sifir!");
       require(reserveOut >= amountOut, "Yetersiz likidite");
 

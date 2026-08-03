@@ -27,6 +27,11 @@ describe("DevSwap Testleri", function () {
     return 0n;
   }
 
+  function getAmountOut(amountIn, reserveIn, reserveOut) {
+    const amountInWithFee = amountIn * 997n;
+    return (reserveOut * amountInWithFee) / (reserveIn * 1000n + amountInWithFee);
+  }
+
   beforeEach(async function () {
     [owner, artist, stranger] = await ethers.getSigners();
 
@@ -250,8 +255,8 @@ describe("DevSwap Testleri", function () {
       ).to.be.revertedWith("Miktar sifir olamaz!");
     });
 
-    it("x*y=k formülü doğru çalışmalı (Çıkan miktar matematiksel olarak birebir tutmalı)", async function () {
-      const expectedOut = (LIKIDITE_MIKTARI * SWAP_MIKTARI) / (LIKIDITE_MIKTARI + SWAP_MIKTARI);
+    it("x*y=k formülü fee ile doğru çalışmalı", async function () {
+      const expectedOut = getAmountOut(SWAP_MIKTARI, LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
       const before = await tokenB.balanceOf(artist.address);
 
       await devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI);
@@ -274,22 +279,54 @@ describe("DevSwap Testleri", function () {
     });
 
     it("State/Effects: Swap sonrası reserveA ve reserveB doğru güncellenmeli", async function () {
-      const expectedOut =(LIKIDITE_MIKTARI * SWAP_MIKTARI) / (LIKIDITE_MIKTARI + SWAP_MIKTARI);
+      const expectedOut = getAmountOut(SWAP_MIKTARI, LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
 
       await devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI);
       expect(await devSwap.reserveA()).to.equal(LIKIDITE_MIKTARI + SWAP_MIKTARI);
       expect(await devSwap.reserveB()).to.equal(LIKIDITE_MIKTARI - expectedOut);
     });
 
-    it("Swapped eventi doğru parametrelerle tetiklenmeli (emit edilmeli)", async function () {
-      const beklenentCikti =
-        (LIKIDITE_MIKTARI * SWAP_MIKTARI) / (LIKIDITE_MIKTARI + SWAP_MIKTARI);
+    it("Swapped eventi doğru parametrelerle tetiklenmeli", async function () {
+      const beklenentCikti = getAmountOut(SWAP_MIKTARI, LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
       await expect(devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI))
         .to.emit(devSwap, "Swapped")
         .withArgs(artist.address, tokenA.target, SWAP_MIKTARI, beklenentCikti);
     });
-  });
 
+
+    it("YENI: Fee'siz formülden DAHA AZ çıktı vermeli (fee kesiliyor kanıtı)", async function () {
+      const feesizOut = (LIKIDITE_MIKTARI * SWAP_MIKTARI) / (LIKIDITE_MIKTARI + SWAP_MIKTARI);
+      const feeliOut = getAmountOut(SWAP_MIKTARI, LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
+      
+      expect(feeliOut).to.be.below(feesizOut);
+    });
+
+    it("YENI: Swap sonrası k değeri ARTMALI (fee havuzda birikiyor)", async function () {
+      const kOnce = LIKIDITE_MIKTARI * LIKIDITE_MIKTARI;
+
+      await devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI);
+
+      const reserveASonra = await devSwap.reserveA();
+      const reserveBSonra = await devSwap.reserveB();
+      const kSonra = reserveASonra * reserveBSonra;
+
+      expect(kSonra).to.be.above(kOnce);
+    });
+
+    it("YENI: LP sahibi fee kazancı ile daha fazla token çekebilmeli", async function () {
+      await devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI);
+
+      const ownerLP = await devSwap.balanceOf(owner.address);
+      const beforeA = await tokenA.balanceOf(owner.address);
+      
+      await devSwap.removeLiquidity(ownerLP);
+      
+      const afterA = await tokenA.balanceOf(owner.address);
+      const cekilen = afterA - beforeA;
+      
+      expect(cekilen).to.be.above(0n);
+    });
+  });
   
   describe("RemoveLiquidity testleri", function () {
   beforeEach(async function () {
