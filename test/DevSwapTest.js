@@ -294,14 +294,14 @@ describe("DevSwap Testleri", function () {
     });
 
 
-    it("YENI: Fee'siz formülden DAHA AZ çıktı vermeli (fee kesiliyor kanıtı)", async function () {
+    it("Fee'siz formülden DAHA AZ çıktı vermeli (fee kesiliyor kanıtı)", async function () {
       const feesizOut = (LIKIDITE_MIKTARI * SWAP_MIKTARI) / (LIKIDITE_MIKTARI + SWAP_MIKTARI);
       const feeliOut = getAmountOut(SWAP_MIKTARI, LIKIDITE_MIKTARI, LIKIDITE_MIKTARI);
       
       expect(feeliOut).to.be.below(feesizOut);
     });
 
-    it("YENI: Swap sonrası k değeri ARTMALI (fee havuzda birikiyor)", async function () {
+    it(" Swap sonrası k değeri ARTMALI (fee havuzda birikiyor)", async function () {
       const kOnce = LIKIDITE_MIKTARI * LIKIDITE_MIKTARI;
 
       await devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI);
@@ -313,7 +313,7 @@ describe("DevSwap Testleri", function () {
       expect(kSonra).to.be.above(kOnce);
     });
 
-    it("YENI: LP sahibi fee kazancı ile daha fazla token çekebilmeli", async function () {
+    it(" LP sahibi fee kazancı ile daha fazla token çekebilmeli", async function () {
       await devSwap.connect(artist).swap(tokenA.target, SWAP_MIKTARI);
 
       const ownerLP = await devSwap.balanceOf(owner.address);
