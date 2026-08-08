@@ -126,5 +126,71 @@ describe("DevSwapRouter Testleri", function () {
       expect(await pairContract.reserveB()).to.be.above(0n);
     });
   });
+
+    describe("removeLiquidity Testleri", function () {
+    let pairContract;
+ 
+    beforeEach(async function () {
+      const deadline = await futureDeadline();
+      await router.addLiquidity(tokenA.target, tokenB.target, AMOUNT_A, AMOUNT_B, deadline);
+ 
+      const pairAddress = await factory.getPair(tokenA.target, tokenB.target);
+      const DevSwap = await ethers.getContractFactory("DevSwap");
+      pairContract = DevSwap.attach(pairAddress);
+ 
+      await pairContract.approve(router.target, ethers.MaxUint256);
+    });
+ 
+    it("Deadline gecmisse revert etmeli", async function () {
+      const gecmisDeadline = (await ethers.provider.getBlock("latest")).timestamp - 1;
+      const ownerLP = await pairContract.balanceOf(owner.address);
+ 
+      await expect(
+        router.removeLiquidity(tokenA.target, tokenB.target, ownerLP, gecmisDeadline)
+      ).to.be.revertedWith("Islem suresi doldu");
+    });
+ 
+    it("Pair mevcut degilse revert etmeli", async function () {
+      const TokenC = await ethers.getContractFactory("TokenB");
+      const tokenC = await TokenC.deploy();
+ 
+      const deadline = await futureDeadline();
+      await expect(
+        router.removeLiquidity(tokenA.target, tokenC.target, 100, deadline)
+      ).to.be.revertedWith("Pair mevcut degil");
+    });
+ 
+    it("LP yakilinca tokenlar kullaniciya geri donmeli", async function () {
+      const ownerLP = await pairContract.balanceOf(owner.address);
+ 
+      const beforeA = await tokenA.balanceOf(owner.address);
+      const beforeB = await tokenB.balanceOf(owner.address);
+ 
+      const deadline = await futureDeadline();
+      await router.removeLiquidity(tokenA.target, tokenB.target, ownerLP, deadline);
+ 
+      const afterA = await tokenA.balanceOf(owner.address);
+      const afterB = await tokenB.balanceOf(owner.address);
+ 
+      expect(afterA).to.be.above(beforeA);
+      expect(afterB).to.be.above(beforeB);
+    });
+ 
+    it("Token sirasi ters verilse bile dogru miktarlar dogru tokene gitmeli", async function () {
+      const ownerLP = await pairContract.balanceOf(owner.address);
+      const deadline = await futureDeadline();
+ 
+      const beforeA = await tokenA.balanceOf(owner.address);
+      const beforeB = await tokenB.balanceOf(owner.address);
+ 
+      await router.removeLiquidity(tokenB.target, tokenA.target, ownerLP, deadline);
+ 
+      const afterA = await tokenA.balanceOf(owner.address);
+      const afterB = await tokenB.balanceOf(owner.address);
+ 
+      expect(afterA).to.be.above(beforeA);
+      expect(afterB).to.be.above(beforeB);
+    });
+  });
  
 });

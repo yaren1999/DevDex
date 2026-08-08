@@ -48,5 +48,34 @@ contract DevSwapRouter {
         IERC20(pairAddress).transfer(msg.sender, lpMinted);
     }
 
-   
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 lpAmount,
+        uint256 deadline
+    ) external ensureDeadline(deadline) returns (uint256 amountA, uint256 amountB) {
+        address pairAddress = factory.getPair(tokenA, tokenB);
+        require(pairAddress != address(0), "Pair mevcut degil");
+
+        DevSwap pair = DevSwap(pairAddress);
+
+        IERC20(pairAddress).transferFrom(msg.sender, address(this), lpAmount);
+
+        (uint256 outA, uint256 outB) = pair.removeLiquidity(lpAmount);
+
+        
+     if (address(pair.tokenA()) == tokenA) {
+            amountA = outA;
+            amountB = outB;
+        } else {
+            amountA = outB;
+            amountB = outA;
+        }
+
+        IERC20(tokenA).transfer(msg.sender, amountA);
+        IERC20(tokenB).transfer(msg.sender, amountB);
+    }
+
+    
+
 }
