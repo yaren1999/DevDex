@@ -7,17 +7,9 @@ contract DevSwapFactory {
     mapping(address => mapping(address => address)) public getPair;
     address[] public allPairs;
 
-    event PairCreated(
-        address indexed token0,
-        address indexed token1,
-        address pair,
-        uint256 pairIndex
-    );
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint256 pairIndex);
 
-    function createPair(
-        address tokenA,
-        address tokenB
-    ) external returns (address pair) {
+    function createPair(address tokenA,address tokenB) external returns (address pair) {
 
         require(tokenA != address(0), "Gecersiz tokenA adresi");
         require(tokenB != address(0), "Gecersiz tokenB adresi");
@@ -27,14 +19,10 @@ contract DevSwapFactory {
             ? (tokenA, tokenB)
             : (tokenB, tokenA);
 
-        require(
-            getPair[token0][token1] == address(0),
-            "Pair zaten mevcut"
-        );
+        require(getPair[token0][token1] == address(0),"Pair zaten mevcut");
 
         pair = address(new DevSwap(token0, token1));
 
-        // Pair adresini iki yonde de kaydediyoruz.
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair;
 
